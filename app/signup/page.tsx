@@ -16,6 +16,8 @@ export default function SignUpPage() {
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(formData: FormData) {
+    if (isPending) return; // Prevent duplicate submissions
+
     setError(null);
     const email = (formData.get('email') as string) || '';
     const password = (formData.get('password') as string) || '';
@@ -112,7 +114,7 @@ export default function SignUpPage() {
                 role="alert"
               >
                 <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-destructive">{error}</p>
+                <p className="text-sm text-destructive leading-relaxed">{error}</p>
               </div>
             )}
 
@@ -129,8 +131,9 @@ export default function SignUpPage() {
                   type="email"
                   autoComplete="email"
                   required
+                  disabled={isPending}
                   placeholder="Enter your email address"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors disabled:opacity-50"
                 />
               </div>
             </div>
@@ -148,8 +151,9 @@ export default function SignUpPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  disabled={isPending}
                   placeholder="Create a password (min 6 characters)"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-10 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-10 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -175,8 +179,9 @@ export default function SignUpPage() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  disabled={isPending}
                   placeholder="Re-enter your password"
-                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-10 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
+                  className="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-10 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -197,6 +202,7 @@ export default function SignUpPage() {
               size="lg"
               className="w-full mt-2"
               loading={isPending}
+              disabled={isPending}
             >
               Create Account
             </Button>

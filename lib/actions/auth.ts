@@ -30,6 +30,15 @@ export async function login(input: LoginInput) {
     });
 
     if (error) {
+      if (
+        error.message.includes('rate limit') ||
+        error.message.includes('over_email_send_rate_limit') ||
+        (error as any).status === 429
+      ) {
+        return {
+          error: 'Email sending limit reached. Please wait a while before requesting another confirmation email.',
+        };
+      }
       if (error.message.includes('Invalid login credentials')) {
         return { error: 'Invalid email or password. Please try again.' };
       }
@@ -75,6 +84,15 @@ export async function signUp(input: SignUpInput) {
     });
 
     if (error) {
+      if (
+        error.message.includes('rate limit') ||
+        error.message.includes('over_email_send_rate_limit') ||
+        (error as any).status === 429
+      ) {
+        return {
+          error: 'Email sending limit reached. Please wait a while before requesting another confirmation email.',
+        };
+      }
       if (error.message.includes('User already registered') || error.message.includes('already exists')) {
         return { error: 'This email is already registered. Please sign in.' };
       }
