@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ProductSchema, CreateInvoiceSchema, LoginSchema } from '@/lib/validations';
+import { ProductSchema, CreateInvoiceSchema, LoginSchema, SignUpSchema } from '@/lib/validations';
 
 describe('ProductSchema', () => {
   const validProduct = {
@@ -144,6 +144,44 @@ describe('LoginSchema', () => {
 
   it('rejects empty email', () => {
     const result = LoginSchema.safeParse({ email: '', password: 'password123' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('SignUpSchema', () => {
+  it('accepts matching passwords and valid email', () => {
+    const result = SignUpSchema.safeParse({
+      email: 'user@example.com',
+      password: 'password123',
+      confirmPassword: 'password123',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects mismatched passwords', () => {
+    const result = SignUpSchema.safeParse({
+      email: 'user@example.com',
+      password: 'password123',
+      confirmPassword: 'password456',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects short password', () => {
+    const result = SignUpSchema.safeParse({
+      email: 'user@example.com',
+      password: '123',
+      confirmPassword: '123',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid email', () => {
+    const result = SignUpSchema.safeParse({
+      email: 'invalid-email',
+      password: 'password123',
+      confirmPassword: 'password123',
+    });
     expect(result.success).toBe(false);
   });
 });

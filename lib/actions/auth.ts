@@ -2,14 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { LoginSchema } from '@/lib/validations';
+import { LoginSchema, SignUpSchema } from '@/lib/validations';
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
 
   const rawData = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
+    email: (formData.get('email') as string) || '',
+    password: (formData.get('password') as string) || '',
   };
 
   const parsed = LoginSchema.safeParse(rawData);
@@ -23,10 +23,71 @@ export async function login(formData: FormData) {
     if (error.message.includes('Invalid login credentials')) {
       return { error: 'Invalid email or password. Please try again.' };
     }
-    return { error: 'Login failed. Please try again.' };
+    if (error.message.includes('Email not confirmed')) {
+      return { error: 'Please verify your email before signing in.' };
+    }
+    return { error: error.message };
   }
 
   redirect('/dashboard');
+}
+
+export async function signUp(formData: FormData, originUrl?: string) {
+  const supabase = await createClient();
+
+  const rawData = {
+    email: (formData.get('email') as string) || '',
+    password: (formData.get('password') as string) || '',
+    confirmPassword: (formData.get('confirmPassword') as string) || '',
+  };
+
+  const parsed = SignUpSchema.safeParse(rawData);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const origin =
+    originUrl ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    'https://stock-flow-3-d-smart-inventory-invoice-management-plvhulakc.vercel.app';
+
+  const redirectTo = `${origin}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      emailRedirectTo: redirectTo,
+    },
+  });
+
+  if (error) {
+    if (error.message.includes('User already registered') || error.message.includes('already exists')) {
+      return { error: 'This email is already registered. Please sign in.' };
+    }
+    return { error: error.message };
+  }
+
+  if (data.user && !data.session) {
+    return {
+      success: true,
+      requiresEmailVerification: true,
+      email: parsed.data.email,
+      message: "We've sent a confirmation link to your email address. Please verify your email before signing in.",
+    };
+  }
+
+  if (data.session) {
+    redirect('/dashboard');
+  }
+
+  return {
+    success: true,
+    requiresEmailVerification: true,
+    email: parsed.data.email,
+    message: 'Check your email for a confirmation link.',
+  };
 }
 
 export async function logout() {
@@ -37,6 +98,8 @@ export async function logout() {
 
 export async function getUser() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   return user;
 }

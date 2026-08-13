@@ -51,13 +51,12 @@ export async function middleware(request: NextRequest) {
               supabaseResponse.cookies.set(name, value, options)
             );
           } catch {
-            // Ignore cookie setting errors in middleware read phase
+            // Cookie mutation safety
           }
         },
       },
     });
 
-    // Refresh session if expired
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -72,13 +71,12 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Redirect authenticated users away from login page
-    if (user && pathname === '/login') {
+    // Redirect authenticated users away from auth pages
+    if (user && (pathname === '/login' || pathname === '/signup')) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   } catch (err) {
     console.error('Middleware execution error:', err);
-    // On unexpected middleware error, ensure unauthenticated protected routes are redirected
     if (isProtectedRoute) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
