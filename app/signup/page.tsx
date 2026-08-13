@@ -17,8 +17,13 @@ export default function SignUpPage() {
 
   async function handleSubmit(formData: FormData) {
     setError(null);
-    const password = formData.get('password') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
+    const password = (formData.get('password') as string) || '';
+    const confirmPassword = (formData.get('confirmPassword') as string) || '';
+
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -26,16 +31,21 @@ export default function SignUpPage() {
     }
 
     startTransition(async () => {
-      const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
-      const result = await signUp(formData, origin);
+      try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+        const result = await signUp(formData, origin);
 
-      if (result?.error) {
-        setError(result.error);
-      } else if (result?.success) {
-        setSuccessInfo({
-          email: result.email || (formData.get('email') as string),
-          message: result.message || 'Check your email for a confirmation link.',
-        });
+        if (result?.error) {
+          setError(result.error);
+        } else if (result?.success) {
+          setSuccessInfo({
+            email: result.email || (formData.get('email') as string),
+            message: result.message || 'Check your email for a confirmation link.',
+          });
+        }
+      } catch (err: any) {
+        console.error('SignUp form submit error:', err);
+        setError(err?.message || 'Failed to submit sign up. Please try again.');
       }
     });
   }
