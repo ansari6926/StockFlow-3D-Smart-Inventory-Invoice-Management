@@ -4,21 +4,30 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { LoginSchema, SignUpSchema } from '@/lib/validations';
 
-export async function login(formData: FormData) {
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface SignUpInput {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  originUrl?: string;
+}
+
+export async function login(input: LoginInput) {
   try {
-    const supabase = await createClient();
-
-    const rawData = {
-      email: (formData.get('email') as string) || '',
-      password: (formData.get('password') as string) || '',
-    };
-
-    const parsed = LoginSchema.safeParse(rawData);
+    const parsed = LoginSchema.safeParse(input);
     if (!parsed.success) {
       return { error: parsed.error.issues[0].message };
     }
 
-    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
 
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
@@ -40,23 +49,17 @@ export async function login(formData: FormData) {
   }
 }
 
-export async function signUp(formData: FormData, originUrl?: string) {
+export async function signUp(input: SignUpInput) {
   try {
-    const supabase = await createClient();
-
-    const rawData = {
-      email: (formData.get('email') as string) || '',
-      password: (formData.get('password') as string) || '',
-      confirmPassword: (formData.get('confirmPassword') as string) || '',
-    };
-
-    const parsed = SignUpSchema.safeParse(rawData);
+    const parsed = SignUpSchema.safeParse(input);
     if (!parsed.success) {
       return { error: parsed.error.issues[0].message };
     }
 
+    const supabase = await createClient();
+
     const origin =
-      originUrl ||
+      input.originUrl ||
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
       'https://stock-flow-3-d-smart-inventory-invoice-management-plvhulakc.vercel.app';

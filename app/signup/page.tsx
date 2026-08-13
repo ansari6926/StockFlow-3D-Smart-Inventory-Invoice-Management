@@ -17,8 +17,14 @@ export default function SignUpPage() {
 
   async function handleSubmit(formData: FormData) {
     setError(null);
+    const email = (formData.get('email') as string) || '';
     const password = (formData.get('password') as string) || '';
     const confirmPassword = (formData.get('confirmPassword') as string) || '';
+
+    if (!email.trim()) {
+      setError('Please enter a valid email address.');
+      return;
+    }
 
     if (!password || password.length < 6) {
       setError('Password must be at least 6 characters long.');
@@ -32,14 +38,14 @@ export default function SignUpPage() {
 
     startTransition(async () => {
       try {
-        const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
-        const result = await signUp(formData, origin);
+        const originUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+        const result = await signUp({ email, password, confirmPassword, originUrl });
 
         if (result?.error) {
           setError(result.error);
         } else if (result?.success) {
           setSuccessInfo({
-            email: result.email || (formData.get('email') as string),
+            email: result.email || email,
             message: result.message || 'Check your email for a confirmation link.',
           });
         }

@@ -24,10 +24,28 @@ function LoginForm() {
 
   async function handleSubmit(formData: FormData) {
     setError(null);
+    const email = (formData.get('email') as string) || '';
+    const password = (formData.get('password') as string) || '';
+
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
     startTransition(async () => {
-      const result = await login(formData);
-      if (result?.error) {
-        setError(result.error);
+      try {
+        const result = await login({ email, password });
+        if (result?.error) {
+          setError(result.error);
+        }
+      } catch (err: any) {
+        console.error('Login submit error:', err);
+        setError(err?.message || 'Failed to sign in. Please try again.');
       }
     });
   }
