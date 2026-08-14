@@ -1,47 +1,37 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const DEFAULT_SUPABASE_URL = 'https://luxpmecozsggeootwcwq.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_2zNkublJ_43fPxP92I1LJg_sjEEsEpJ';
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
-
-  const pathname = request.nextUrl.pathname;
-
-  // Intercept any incoming requests containing a ?code= parameter (e.g. /?code=... or /login?code=...)
-  // and route them directly to /auth/callback to perform authorization code exchange.
-  if (request.nextUrl.searchParams.has('code') && !pathname.startsWith('/auth/callback')) {
-    const callbackUrl = new URL('/auth/callback', request.url);
-    callbackUrl.search = request.nextUrl.search;
-    return NextResponse.redirect(callbackUrl);
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  const isProtectedRoute =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/inventory') ||
-    pathname.startsWith('/invoices');
-
-  const isProtectedApi =
-    pathname.startsWith('/api/products') ||
-    pathname.startsWith('/api/invoices');
-
-  // If Supabase environment variables are missing, handle route protection gracefully
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (isProtectedRoute) {
-      const redirectUrl = new URL('/login', request.url);
-      redirectUrl.searchParams.set('redirectTo', pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-    if (isProtectedApi) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    return supabaseResponse;
-  }
-
   try {
+    const pathname = request.nextUrl.pathname;
+
+    // Intercept incoming requests containing a ?code= parameter (e.g. /?code=... or /login?code=...)
+    // and route them directly to /auth/callback to perform authorization code exchange.
+    if (request.nextUrl.searchParams.has('code') && !pathname.startsWith('/auth/callback')) {
+      const callbackUrl = new URL('/auth/callback', request.url);
+      callbackUrl.search = request.nextUrl.search;
+      return NextResponse.redirect(callbackUrl);
+    }
+
+    let supabaseResponse = NextResponse.next({
+      request,
+    });
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+
+    const isProtectedRoute =
+      pathname.startsWith('/dashboard') ||
+      pathname.startsWith('/inventory') ||
+      pathname.startsWith('/invoices');
+
+    const isProtectedApi =
+      pathname.startsWith('/api/products') ||
+      pathname.startsWith('/api/invoices');
+
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
@@ -49,17 +39,13 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value }) =>
-              request.cookies.set(name, value)
-            );
-            supabaseResponse = NextResponse.next({
-              request,
-            });
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            supabaseResponse = NextResponse.next({ request });
             cookiesToSet.forEach(({ name, value, options }) =>
               supabaseResponse.cookies.set(name, value, options)
             );
           } catch {
-            // Cookie mutation safety
+            // Edge runtime cookie mutation catch
           }
         },
       },
@@ -83,17 +69,12 @@ export async function middleware(request: NextRequest) {
     if (user && (pathname === '/login' || pathname === '/signup')) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
+
+    return supabaseResponse;
   } catch (err) {
     console.error('Middleware execution error:', err);
-    if (isProtectedRoute) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-    if (isProtectedApi) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    return NextResponse.next({ request });
   }
-
-  return supabaseResponse;
 }
 
 export const config = {
