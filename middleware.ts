@@ -6,10 +6,18 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+
+  // Intercept any incoming requests containing a ?code= parameter (e.g. /?code=... or /login?code=...)
+  // and route them directly to /auth/callback to perform authorization code exchange.
+  if (request.nextUrl.searchParams.has('code') && !pathname.startsWith('/auth/callback')) {
+    const callbackUrl = new URL('/auth/callback', request.url);
+    callbackUrl.search = request.nextUrl.search;
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  const pathname = request.nextUrl.pathname;
 
   const isProtectedRoute =
     pathname.startsWith('/dashboard') ||
