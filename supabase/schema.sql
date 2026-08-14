@@ -7,6 +7,17 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
+-- PROFILES TABLE (User Profile & Display Name)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS profiles (
+  id           UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email        TEXT        DEFAULT '',
+  display_name TEXT        DEFAULT '',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- PRODUCTS TABLE
 -- ============================================================
 CREATE TABLE IF NOT EXISTS products (
@@ -86,8 +97,6 @@ CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1000;
 
 -- ============================================================
 -- RPC: CREATE INVOICE (Atomic Transaction)
--- Validates stock, deducts inventory, creates invoice + items
--- All in a single transaction — prevents overselling
 -- ============================================================
 CREATE OR REPLACE FUNCTION create_invoice(
   p_customer_name   TEXT,
@@ -113,12 +122,10 @@ DECLARE
   v_line_total     NUMERIC(10,2);
   v_qty            INTEGER;
 BEGIN
-  -- Validate at least one item
   IF jsonb_array_length(p_items) = 0 THEN
     RAISE EXCEPTION 'VALIDATION_ERROR: Invoice must contain at least one item';
   END IF;
 
-  -- Validate discount and tax ranges
   IF p_discount_pct < 0 OR p_discount_pct > 100 THEN
     RAISE EXCEPTION 'VALIDATION_ERROR: Discount percentage must be between 0 and 100';
   END IF;
@@ -126,7 +133,6 @@ BEGIN
     RAISE EXCEPTION 'VALIDATION_ERROR: Tax percentage must be between 0 and 100';
   END IF;
 
-  -- Lock all product rows in consistent order to prevent deadlocks
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_qty := (v_item->>'quantity')::INTEGER;
     IF v_qty <= 0 THEN
@@ -149,10 +155,8 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Generate invoice number
   v_invoice_number := 'INV-' || LPAD(nextval('invoice_number_seq')::TEXT, 6, '0');
 
-  -- Calculate line totals and subtotal (use TRUSTED price from DB, never from client)
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_qty := (v_item->>'quantity')::INTEGER;
 
@@ -163,7 +167,6 @@ BEGIN
     v_subtotal   := v_subtotal + v_line_total;
   END LOOP;
 
-  -- Calculate discount, tax, total
   v_discount_amt := ROUND(v_subtotal * p_discount_pct / 100, 2);
   v_tax_amt      := ROUND((v_subtotal - v_discount_amt) * p_tax_pct / 100, 2);
   v_total        := v_subtotal - v_discount_amt + v_tax_amt;
@@ -172,14 +175,12 @@ BEGIN
     RAISE EXCEPTION 'VALIDATION_ERROR: Invoice total cannot be negative';
   END IF;
 
-  -- Create invoice record
   INSERT INTO invoices (
     invoice_number, customer_name, subtotal, discount, tax, total, notes, created_by, status
   ) VALUES (
     v_invoice_number, p_customer_name, v_subtotal, v_discount_amt, v_tax_amt, v_total, p_notes, p_created_by, 'PAID'
   ) RETURNING id INTO v_invoice_id;
 
-  -- Deduct stock and insert invoice items
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_qty := (v_item->>'quantity')::INTEGER;
 
@@ -189,7 +190,6 @@ BEGIN
     INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, line_total)
     VALUES (v_invoice_id, (v_item->>'product_id')::UUID, v_qty, v_product.price, v_line_total);
 
-    -- Deduct stock (validated above — cannot go negative due to earlier check)
     UPDATE products
     SET stock_quantity = stock_quantity - v_qty
     WHERE id = (v_item->>'product_id')::UUID;
@@ -205,7 +205,6 @@ $$;
 
 -- ============================================================
 -- RPC: CANCEL INVOICE (Atomic Transaction)
--- Sets status to CANCELLED and restores stock — exactly once
 -- ============================================================
 CREATE OR REPLACE FUNCTION cancel_invoice(
   p_invoice_id UUID,
@@ -219,7 +218,6 @@ DECLARE
   v_invoice RECORD;
   v_item    RECORD;
 BEGIN
-  -- Lock invoice row
   SELECT id, status, created_by INTO v_invoice
   FROM invoices
   WHERE id = p_invoice_id
@@ -229,19 +227,12 @@ BEGIN
     RAISE EXCEPTION 'NOT_FOUND: Invoice not found';
   END IF;
 
-  -- Guard: only creator can cancel (or any authenticated user — adjust per policy)
-  -- For demo purposes we allow any authenticated user to cancel
-  -- In production you would check: IF v_invoice.created_by != p_user_id THEN RAISE EXCEPTION ...
-
-  -- Guard: prevent double-cancellation (idempotency)
   IF v_invoice.status = 'CANCELLED' THEN
     RAISE EXCEPTION 'ALREADY_CANCELLED: This invoice has already been cancelled';
   END IF;
 
-  -- Update invoice status
   UPDATE invoices SET status = 'CANCELLED' WHERE id = p_invoice_id;
 
-  -- Restore stock for each line item — exactly once
   FOR v_item IN
     SELECT product_id, quantity FROM invoice_items WHERE invoice_id = p_invoice_id
   LOOP
@@ -261,9 +252,19 @@ $$;
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================================
+ALTER TABLE profiles     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
+
+-- Profiles: users can select/update their own profile
+DROP POLICY IF EXISTS "profiles_authenticated_select" ON profiles;
+CREATE POLICY "profiles_authenticated_select" ON profiles
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "profiles_self_upsert" ON profiles;
+CREATE POLICY "profiles_self_upsert" ON profiles
+  FOR ALL TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- Products: authenticated users can read/write
 DROP POLICY IF EXISTS "products_authenticated" ON products;

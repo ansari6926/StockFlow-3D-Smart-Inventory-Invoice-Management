@@ -11,11 +11,12 @@ import {
   Boxes,
 } from 'lucide-react';
 import { getDashboardStats } from '@/lib/actions/invoices';
+import { getProfile } from '@/lib/actions/profile';
 import { Navbar } from '@/components/layout/Navbar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatDate, isLowStock } from '@/lib/utils';
+import { formatCurrency, isLowStock } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,14 +59,28 @@ function StatCard({
 }
 
 export default async function DashboardPage() {
-  const { data: stats, error } = await getDashboardStats();
+  const [statsRes, profileRes] = await Promise.all([
+    getDashboardStats(),
+    getProfile(),
+  ]);
+
+  const stats = statsRes.data;
+  const error = statsRes.error;
+  const profile = profileRes.data;
+
+  const displayName = profile?.display_name || 'User';
 
   if (error || !stats) {
     return (
       <div>
-        <Navbar title="Dashboard" subtitle="Overview & analytics" />
+        <Navbar
+          title={`Welcome back, ${displayName}`}
+          subtitle="Smart Inventory & Invoice Management Overview"
+          userDisplayName={profile?.display_name}
+          userEmail={profile?.email}
+        />
         <div className="p-6">
-          <p className="text-destructive">{error || 'Failed to load dashboard'}</p>
+          <p className="text-destructive">{error || 'Failed to load dashboard statistics'}</p>
         </div>
       </div>
     );
@@ -73,7 +88,12 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <Navbar title="Dashboard" subtitle="Overview & analytics" />
+      <Navbar
+        title={`Welcome back, ${displayName}`}
+        subtitle="Smart Inventory & Invoice Management Overview"
+        userDisplayName={profile?.display_name}
+        userEmail={profile?.email}
+      />
       <div className="p-6 space-y-6">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
